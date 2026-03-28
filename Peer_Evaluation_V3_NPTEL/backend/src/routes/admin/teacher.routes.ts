@@ -17,7 +17,8 @@ const router = express.Router();
 //router.post('/',authMiddleware,authorizeRoles("admin"), createTeacher);
 router.get('/',authMiddleware,authorizeRoles("admin"), getAllTeachers);
 //router.get('/:id',authMiddleware,authorizeRoles("admin"), getTeacherById as RequestHandler);
-router.put('/assign-course',authMiddleware,authorizeRoles('admin'),assignTeacherToCourse);
+
+router.put('/assign-course', authMiddleware, authorizeRoles('admin'), assignTeacherToCourse);
 router.put('/unassign-course',authMiddleware,authorizeRoles('admin'),unassignTeacherFromCourse);
 //router.put('/:id',authMiddleware,authorizeRoles("admin"), updateTeacher as RequestHandler);
 router.delete('/email/:email',authMiddleware,authorizeRoles("admin"), deleteTeacher as RequestHandler);

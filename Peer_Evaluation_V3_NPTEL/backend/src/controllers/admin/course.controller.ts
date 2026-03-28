@@ -46,7 +46,7 @@ export const addCourse = async (req: Request, res: Response): Promise<void> => {
 };
 
 // Update an existing course
-/*export const updateCourse = async (req: Request, res: Response): Promise<void> => {
+export const updateCourse = async (req: Request, res: Response): Promise<void> => {
   try {
     const { courseId } = req.params;
     const updated = await Course.findByIdAndUpdate(courseId, req.body, { new: true });
@@ -60,7 +60,7 @@ export const addCourse = async (req: Request, res: Response): Promise<void> => {
   } catch (err) {
     res.status(500).json({ message: "Failed to update course", error: err });
   }
-};*/
+};
 
 // Delete a course and all its batches by course code
 // export const deleteCourse = async (req: Request, res: Response): Promise<void> => {
@@ -226,7 +226,7 @@ export const getAllBatches = async (_req: Request, res: Response): Promise<void>
 // };
 
 // Update a batch
-/*export const updateBatch = async (req: Request, res: Response): Promise<void> => {
+export const updateBatch = async (req: Request, res: Response): Promise<void> => {
   try {
     const { batchId } = req.params;
     const updated = await Batch.findByIdAndUpdate(batchId, req.body, { new: true });
@@ -240,7 +240,7 @@ export const getAllBatches = async (_req: Request, res: Response): Promise<void>
   } catch (err) {
     res.status(500).json({ message: "Failed to update batch", error: err });
   }
-};*/
+};
 
 // Delete a batch
 export const deleteBatch = async (req: Request, res: Response): Promise<void> => {

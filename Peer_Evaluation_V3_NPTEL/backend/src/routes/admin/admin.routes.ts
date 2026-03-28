@@ -3,7 +3,7 @@ import { deleteCourseAndBatches } from "../../controllers/admin/course.controlle
 import { createBatchWithNames } from "../../controllers/admin/course.controller.ts";
 import {
   addCourse,
-  //updateCourse,
+  updateCourse,
   
   getAllCourses,
   //getCourseById,
@@ -19,6 +19,7 @@ import {
 import { authMiddleware } from "../../middlewares/authMiddleware.ts";      
 import { authorizeRoles } from "../../middlewares/authorizeRoles.ts";   
 import { User } from '../../models/User.ts'; 
+import { bulkAddUsers } from "../../controllers/admin/addbulkuserscsv.controller.ts"
 
 const router = Router();
 
@@ -27,7 +28,7 @@ const router = Router();
 
 //Course operations
 router.post("/courses",authMiddleware,authorizeRoles("admin"),addCourse);
-//router.put("/courses/:courseId",authMiddleware,authorizeRoles("admin"),updateCourse);
+router.put("/courses/:courseId",authMiddleware,authorizeRoles("admin"),updateCourse);
 
 router.get('/users', async (_req: Request, res: Response) => {
   try {
@@ -54,6 +55,8 @@ router.get('/batches/',authMiddleware,authorizeRoles("admin"), getAllBatches);
 router.post("/update-role", updateStudentTaRole);
 router.post('/create-batch-with-names', createBatchWithNames);
 router.delete("/:courseId", deleteCourseAndBatches);
+// // addbulkuser
+router.post("/users/bulk", bulkAddUsers);
 export default router;
 
 
