@@ -2,11 +2,19 @@ import { Request, Response } from 'express';
 import { User } from '../../models/User.ts';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import { sendHtmlEmail } from '../../utils/email.ts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pes-secret';
 const OTP_STORE = new Map<string, string>();
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+const clearInviteState = (user: InstanceType<typeof User>) => {
+  user.mustSetPassword = false;
+  user.inviteTokenHash = undefined;
+  user.inviteExpiresAt = undefined;
+  user.inviteUsedAt = new Date();
+};
 
 export const sendOtpEmail = async (req: Request, res: Response) : Promise<void> => {
   const { email } = req.body;
@@ -19,25 +27,12 @@ export const sendOtpEmail = async (req: Request, res: Response) : Promise<void> 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   OTP_STORE.set(email, otp);
 
-  // Configure transporter
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.MAIL_SENDER || "noreplypeerevaluationsystem@gmail.com",      
-      pass: process.env.MAIL_PASSWORD ||  "twmnfoksvgwfcegh"   
-    }
-  });
-
-  // Email options
-  const mailOptions = {
-    from: `"OTP Verification" <noreplypeerevaluationsystem@gmail.com>`,
-    to: email,
-    subject: 'Your OTP Code',
-    html: `<h3>Your OTP is <span style="color:blue">${otp}</span></h3>`
-  };
-
   try {
-    await transporter.sendMail(mailOptions);
+    await sendHtmlEmail(
+      email,
+      'Your OTP Code',
+      `<h3>Your OTP is <span style="color:blue">${otp}</span></h3>`
+    );
     res.status(200).json({ message: 'OTP sent successfully' });
   } catch (error) {
     console.error(error);
@@ -91,6 +86,14 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
 
+    if (user?.mustSetPassword) {
+      res.status(403).json({
+        error: 'Account setup required. Please use the invite email or reset your password.',
+        code: 'INVITE_PENDING',
+      });
+      return;
+    }
+
     if (!user || !(await bcrypt.compare(password, user.password))) {
       res.status(401).json({ error: 'Invalid email or password' });
       return;
@@ -137,26 +140,20 @@ export const forgotPassword = async (req: Request, res: Response) => {
     //const resetLink = `${FRONTEND_URL}/reset-password/${token}`;
     const resetLink = `${FRONTEND_URL}/reset-password?token=${token}`;
 
-    // Send email
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.MAIL_SENDER || "noreplypeerevaluationsystem@gmail.com",      
-          pass: process.env.MAIL_PASSWORD ||  "twmnfoksvgwfcegh"   
-        }
-      });
-
-    await transporter.sendMail({
-      from: `"Password Reset" <noreplypeerevaluationsystem@gmail.com>`,
-      to: email,
-      subject: 'Reset your password',
-      html: `
+    await sendHtmlEmail(
+      email,
+      user.mustSetPassword ? 'Complete your account setup' : 'Reset your password',
+      `
         <h3>Hello, ${user.name || 'User'}</h3>
-        <p>You requested to reset your password.</p>
-        <p><a href="${resetLink}" target="_blank">Click here to reset it</a></p>
+        <p>${
+          user.mustSetPassword
+            ? 'Your account is waiting for password setup.'
+            : 'You requested to reset your password.'
+        }</p>
+        <p><a href="${resetLink}" target="_blank" rel="noopener noreferrer">Click here to continue</a></p>
         <p>This link is valid for 15 minutes only.</p>
-      `,
-    });
+      `
+    );
 
     res.status(200).json({ message: 'Password reset link sent to email.' });
   } catch (err) {
@@ -180,11 +177,48 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
+    if (user.mustSetPassword || user.inviteTokenHash || user.inviteExpiresAt) {
+      clearInviteState(user);
+    }
     await user.save();
 
     res.status(200).json({ message: 'Password updated successfully' });
   } catch (err) {
     console.error('Reset token error:', err);
     res.status(400).json({ message: 'Invalid or expired reset token' });
+  }
+};
+
+export const setPasswordFromInvite = async (req: Request, res: Response) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    res.status(400).json({ message: 'Token and new password are required.' });
+    return;
+  }
+
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({ inviteTokenHash: tokenHash });
+
+    if (
+      !user ||
+      !user.mustSetPassword ||
+      !user.inviteExpiresAt ||
+      user.inviteUsedAt ||
+      user.inviteExpiresAt.getTime() < Date.now()
+    ) {
+      res.status(400).json({ message: 'Invite link is invalid or expired.' });
+      return;
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    clearInviteState(user);
+    await user.save();
+
+    res.status(200).json({ message: 'Password set successfully. You can now log in.' });
+  } catch (err) {
+    console.error('Invite setup error:', err);
+    res.status(500).json({ message: 'Failed to set password from invite.' });
   }
 };

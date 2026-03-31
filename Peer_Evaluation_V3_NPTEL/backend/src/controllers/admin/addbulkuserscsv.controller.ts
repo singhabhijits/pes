@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { User } from "../../models/User.ts"; // 1. Added .js for Node16 module resolution
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import { sendInviteEmail } from "../../utils/email.ts";
 
 // 1. Define the Strict Zod Schema (Optimized with trim/toLowerCase)
 const userSchema = z.object({
@@ -13,8 +15,18 @@ const userSchema = z.object({
 });
 
 const bulkUserSchema = z.array(userSchema);
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const INVITE_EXPIRY_HOURS = 48;
+
+const createInviteToken = () => {
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  const expiresAt = new Date(Date.now() + INVITE_EXPIRY_HOURS * 60 * 60 * 1000);
+  return { rawToken, tokenHash, expiresAt };
+};
 
 export const bulkAddUsers = async (req: Request, res: Response): Promise<void> => {
+  console.log("NEW INVITE FLOW HIT");
   try {
     const { users } = req.body;
 
@@ -31,39 +43,93 @@ export const bulkAddUsers = async (req: Request, res: Response): Promise<void> =
     }
 
     const validUsers = validationResult.data;
+    const emails = validUsers.map((user) => user.email);
+    const existingUsers = await User.find({ email: { $in: emails } });
+    const existingByEmail = new Map(existingUsers.map((user) => [user.email, user]));
 
-    // 3. Hash passwords uniquely for EACH user
-    const usersToInsert = await Promise.all(validUsers.map(async (user) => {
-      const salt = await bcrypt.genSalt(10);
-      const uniqueHashedPassword = await bcrypt.hash("Welcome123!", salt);
+    const created: string[] = [];
+    const reinvited: string[] = [];
+    const skipped: string[] = [];
+    const inviteFailed: string[] = [];
 
-      return {
-        ...user,
-        password: uniqueHashedPassword
-      };
-    }));
+    for (const userData of validUsers) {
+      const existingUser = existingByEmail.get(userData.email);
+      const { rawToken, tokenHash, expiresAt } = createInviteToken();
+      const inviteLink = `${FRONTEND_URL}/reset-password?token=${rawToken}&mode=invite`;
 
-    // 4. Insert into DB (ordered: false skips duplicates but continues inserting)
-    const result = await User.insertMany(usersToInsert, { ordered: false });
+      if (existingUser) {
+        if (!existingUser.mustSetPassword) {
+          skipped.push(userData.email);
+          continue;
+        }
 
-    res.status(201).json({
-      message: `Successfully imported ${result.length} users.`,
-      count: result.length
-    });
+        existingUser.name = userData.name;
+        existingUser.role = userData.role;
+        existingUser.inviteTokenHash = tokenHash;
+        existingUser.inviteExpiresAt = expiresAt;
+        existingUser.inviteUsedAt = undefined;
+        await existingUser.save();
 
-  } catch (error: any) {
-    // 5. Precise Duplicate Handling
-    if (error.code === 11000 || error.name === 'BulkWriteError') {
-      // Extract the exact emails that caused the duplicate constraint to fail
-      const skippedEmails = error.writeErrors?.map((err: any) => err.err.op.email) || [];
+        try {
+          await sendInviteEmail(
+            existingUser.email,
+            existingUser.name,
+            inviteLink,
+            INVITE_EXPIRY_HOURS
+          );
+          reinvited.push(existingUser.email);
+        } catch (mailError) {
+          console.error(`Failed to send invite to ${existingUser.email}:`, mailError);
+          inviteFailed.push(existingUser.email);
+        }
 
-      res.status(207).json({
-        message: `Import finished. Skipped ${skippedEmails.length} duplicate emails.`,
-        skipped: skippedEmails
+        continue;
+      }
+
+      const randomPassword = crypto.randomBytes(24).toString("hex");
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      const createdUser = await User.create({
+        ...userData,
+        password: hashedPassword,
+        mustSetPassword: true,
+        inviteTokenHash: tokenHash,
+        inviteExpiresAt: expiresAt,
       });
-    } else {
-      console.error("Bulk import error:", error);
-      res.status(500).json({ message: "Failed to import users.", error: error.message });
+
+      existingByEmail.set(createdUser.email, createdUser);
+
+      try {
+        await sendInviteEmail(
+          createdUser.email,
+          createdUser.name,
+          inviteLink,
+          INVITE_EXPIRY_HOURS
+        );
+        created.push(createdUser.email);
+      } catch (mailError) {
+        console.error(`Failed to send invite to ${createdUser.email}:`, mailError);
+        inviteFailed.push(createdUser.email);
+      }
     }
+
+    const messageParts = [
+      created.length ? `created ${created.length}` : "",
+      reinvited.length ? `re-invited ${reinvited.length}` : "",
+      skipped.length ? `skipped ${skipped.length}` : "",
+      inviteFailed.length ? `email failed for ${inviteFailed.length}` : "",
+    ].filter(Boolean);
+
+    res.status(skipped.length || reinvited.length || inviteFailed.length ? 207 : 201).json({
+      message: `Bulk invite completed: ${messageParts.join(", ")}.`,
+      created,
+      reinvited,
+      skipped,
+      inviteFailed,
+      count: created.length,
+    });
+  } catch (error: any) {
+    console.error("Bulk import error:", error);
+    res.status(500).json({ message: "Failed to import users.", error: error.message });
   }
 };

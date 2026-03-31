@@ -65,8 +65,9 @@ export default function CSVUploader({ currentPalette, token, onSuccess, showToas
       
       // Handle the 207 Partial Success status
       if (response.status === 207) {
-         showToast(response.data.message, 'error'); // Or 'warning' if your toast supports it
-         console.log("Skipped duplicate emails:", response.data.skipped);
+         showToast(response.data.message, 'error');
+         console.log("Skipped emails:", response.data.skipped);
+         console.log("Invite email failures:", response.data.inviteFailed);
       } else {
          showToast(response.data.message, 'success');
       }
@@ -98,11 +99,12 @@ export default function CSVUploader({ currentPalette, token, onSuccess, showToas
       }}
     >
       <h3 className="text-xl font-bold mb-2" style={{ color: currentPalette['text-dark'] }}>
-        Bulk Import Users
+        Bulk Invite Users
       </h3>
       <p className="text-sm mb-6" style={{ color: currentPalette['text-muted'] }}>
         Upload a CSV file. It <strong>must</strong> have headers for: <code>name</code>, <code>email</code>, and <code>role</code>.
-        Valid roles are <em>student, teacher, admin</em>. All new users receive the password <strong>Welcome123!</strong>
+        Valid roles are <em>student, teacher, admin</em>. New users will receive a one-time invite email to set their password.
+        Re-uploading a pending invite will send a fresh invite link.
       </p>
 
       <div className="flex flex-col md:flex-row items-center gap-4 mb-4">
@@ -126,7 +128,7 @@ export default function CSVUploader({ currentPalette, token, onSuccess, showToas
           className={`whitespace-nowrap px-6 py-2 rounded-lg font-semibold shadow-md transition-transform ${preview.length === 0 ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
           style={{ backgroundColor: currentPalette['accent-purple'], color: 'white' }}
         >
-          {isUploading ? 'Importing...' : 'Upload Data'}
+          {isUploading ? 'Sending Invites...' : 'Send Invites'}
         </button>
       </div>
 
