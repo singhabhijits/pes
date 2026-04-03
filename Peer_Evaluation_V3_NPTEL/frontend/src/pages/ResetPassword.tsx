@@ -10,6 +10,8 @@ export default function ResetPassword() {
   const navigate = useNavigate();
   const location = useLocation();
   const token = new URLSearchParams(location.search).get('token');
+  const mode = new URLSearchParams(location.search).get('mode');
+  const isInviteFlow = mode === 'invite';
 
   const [darkMode, setDarkMode] = useState(false);
   const [password, setPassword] = useState('');
@@ -91,20 +93,28 @@ export default function ResetPassword() {
 
     try {
       setIsSubmitting(true);
-      await axios.post(`http://localhost:${PORT}/api/auth/reset-password`, {
+      await axios.post(`http://localhost:${PORT}/api/auth/${isInviteFlow ? 'set-password-from-invite' : 'reset-password'}`, {
         token,
         newPassword: password,
       });
 
-      //alert(res.data.message);
-      
-      showMessage('Password reset successfully. You can now log in with your new password.', 'success');
+      showMessage(
+        isInviteFlow
+          ? 'Password set successfully. Your account is ready and you can now log in.'
+          : 'Password reset successfully. You can now log in with your new password.',
+        'success'
+      );
       setTimeout(() => {
         navigate('/login');
     }, 2000);
     } catch (err) {
       console.error(err);
-      showMessage('Reset failed. Link may have expired.', 'error');
+      showMessage(
+        isInviteFlow
+          ? 'Account setup failed. The invite link may have expired.'
+          : 'Reset failed. Link may have expired.',
+        'error'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -134,7 +144,14 @@ export default function ResetPassword() {
       </Link>
 
       <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md">
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Set New Password</h2>
+        <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
+          {isInviteFlow ? 'Complete Account Setup' : 'Set New Password'}
+        </h2>
+        <p className="text-sm text-center text-gray-500 mb-6">
+          {isInviteFlow
+            ? 'Choose a password to activate your account.'
+            : 'Enter a new password for your account.'}
+        </p>
         <form className="space-y-6" onSubmit={handleSubmit}>
           <input
             type="password"
@@ -162,7 +179,9 @@ export default function ResetPassword() {
             disabled={isSubmitting}
             className="w-full bg-purple-500 text-white py-3 rounded-lg hover:bg-purple-600 transition"
           >
-            {isSubmitting ? 'Updating...' : 'Update Password'}
+            {isSubmitting
+              ? (isInviteFlow ? 'Setting Password...' : 'Updating...')
+              : (isInviteFlow ? 'Activate Account' : 'Update Password')}
           </button>
         </form>
       </div>
