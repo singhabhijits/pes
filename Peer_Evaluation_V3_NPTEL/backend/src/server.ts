@@ -28,8 +28,24 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const corsOptions = {
-  origin: "http://localhost:5173",
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  process.env.FRONTEND_URL,
+  ...(process.env.CORS_ORIGINS?.split(",") ?? []),
+]
+  .map((origin) => origin?.trim())
+  .filter((origin): origin is string => Boolean(origin));
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS policy blocked origin: ${origin}`));
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
