@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css'
 import App from './App.tsx'
+import { configureApiClients } from './lib/api.ts';
 
 const queryClient = new QueryClient();
+configureApiClients();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -7,8 +7,9 @@ export interface IExam extends Document {
   startTime: Date;
   endTime: Date;
   numQuestions: number;
+  questions?: { questionText: string; maxMarks: number }[];
   maxMarks: number[];
-  createdBy: { type: Schema.Types.ObjectId; ref: "User"; required: true };
+  createdBy: Types.ObjectId;
   k: number; // Number of peer evaluations per student
   answerKeyPdf?: Buffer;
   answerKeyMimeType?: string;

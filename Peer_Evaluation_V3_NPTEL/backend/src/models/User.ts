@@ -9,6 +9,10 @@ export interface IUser extends Document {
   role: Role;
   enrolledCourses: Types.ObjectId[];
   reputationScore: number;
+  mustSetPassword: boolean;
+  inviteTokenHash?: string;
+  inviteExpiresAt?: Date;
+  inviteUsedAt?: Date;
 }
 
 const userSchema = new Schema<IUser>({
@@ -18,6 +22,10 @@ const userSchema = new Schema<IUser>({
   role: { type: String, enum: ['admin', 'teacher', 'ta', 'student'], required: true },
   enrolledCourses: [{ type: Schema.Types.ObjectId, ref: 'Course' }],
   reputationScore: { type: Number, default: 0 },
+  mustSetPassword: { type: Boolean, default: false },
+  inviteTokenHash: { type: String },
+  inviteExpiresAt: { type: Date },
+  inviteUsedAt: { type: Date },
 });
 
 export const User = model<IUser>('User', userSchema);

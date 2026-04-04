@@ -25,13 +25,12 @@ export default function Login() {
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
-  const showMessage = (message: string) => {
-    alert(message); // Replace with modal or toast for better UX
-  };
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage('');
 
     try {
       const res = await axios.post(
@@ -58,8 +57,13 @@ export default function Login() {
       else if (role === 'ta') navigate('/ta');
       else navigate('/dashboard');
     } catch (err) {
-      showMessage('Login failed. Please check your credentials.');
       console.error(err);
+      if (axios.isAxiosError(err)) {
+        const serverMessage = err.response?.data?.error;
+        setErrorMessage(serverMessage || 'Login failed. Please check your credentials.');
+      } else {
+        setErrorMessage('Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -126,6 +130,10 @@ export default function Login() {
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
+
+          {errorMessage && (
+            <p className="text-sm text-center text-red-500 -mt-2">{errorMessage}</p>
+          )}
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-300">

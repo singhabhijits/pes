@@ -13,13 +13,25 @@ import { runWithConcurrency } from "../../utils/runWithConcurrency.ts";
 
 const require = createRequire(import.meta.url);
 const jsQR = require("jsqr");
-const poppler = require("pdf-poppler");
 
 interface QRPayload {
   uid: string;
 }
 
+const getPoppler = () => {
+  try {
+    return require("pdf-poppler");
+  } catch (error) {
+    throw new Error(
+      `Bulk PDF conversion is unavailable on ${process.platform}: ${
+        error instanceof Error ? error.message : "pdf-poppler failed to load"
+      }`
+    );
+  }
+};
+
 const convertPdfToImage = async (pdfBuffer: Buffer): Promise<string> => {
+  const poppler = getPoppler();
   const srcDoc = await PDFDocument.load(pdfBuffer);
   const newDoc = await PDFDocument.create();
 

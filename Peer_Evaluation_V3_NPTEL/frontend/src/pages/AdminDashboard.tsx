@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { FiMoon, FiSun } from 'react-icons/fi';
+import EditCourseModal from '../components/admin/EditCoursebatches';
+import CSVUploader from '../components/admin/bulkusercsvuploader';
 
 const PORT = import.meta.env.VITE_BACKEND_PORT || 5000;
 
@@ -298,6 +300,10 @@ const AdminDashboard = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
+  // Course Edit Modal State
+  const [isEditModalOpen, setEditModalOpen] = useState(false);
+  const [courseToEdit, setCourseToEdit] = useState<Course | null>(null);
+
   const currentPalette = getColors(darkMode); // Get current palette based on dark mode state
 
   // Apply dark mode on initial load and when it changes
@@ -387,6 +393,23 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error(error);
       showToast('Failed to add course', 'error');
+    }
+  };
+
+  //edit/update course
+  const handleUpdateCourse = async (courseId: string, updatedData: any) => {
+    try {
+      const response = await axios.put(`http://localhost:${PORT}/api/admin/courses/${courseId}`, updatedData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Replace the old course with the updated one in state
+      setCourses(courses.map(c => c._id === courseId ? response.data : c));
+      setEditModalOpen(false);
+      setCourseToEdit(null);
+      showToast('Course updated successfully');
+    } catch (error) {
+      console.error("Error updating course:", error);
+      showToast('Failed to update course', 'error');
     }
   };
 
@@ -538,6 +561,7 @@ const AdminDashboard = () => {
         };
 
         return (
+          <div>
           <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
             <h1
                 className="text-4xl font-bold text-center mb-6"
@@ -601,6 +625,7 @@ const AdminDashboard = () => {
 
       case 'role':
         return (
+            <div className="grid grid-cols-1 gap-8 w-full">
             <Card title="Role Manager" currentPalette={currentPalette}>
                 <p className="text-base mb-6" style={{ color: currentPalette['text-muted'] }}>Update the role of a user by selecting their email and assigning a new role.</p>
                 <form name="roleUpdateForm" id="roleUpdateForm" onSubmit={handleRoleUpdate} className="space-y-4 max-w-lg">
@@ -670,6 +695,16 @@ const AdminDashboard = () => {
                     </div>
                 </form>
             </Card>
+            {/* 🔹 NEW CSV UPLOADER */}
+            <div className="w-full">
+               <CSVUploader 
+                  currentPalette={currentPalette} 
+                  token={token} 
+                  showToast={showToast} 
+                  onSuccess={() => fetchData(`http://localhost:${PORT}/api/admin/users`, setAllUsers, 'Failed to refetch users')}
+               />
+            </div>
+            </div>
         );
 
       case 'course':
@@ -780,12 +815,27 @@ const AdminDashboard = () => {
                         boxShadow: `0 2px 8px ${currentPalette['shadow-light']}`
                     }}
                     >
-                    <p className="font-semibold">{course.name}</p>
-                    <p className="text-sm" style={{ color: currentPalette['text-muted'] }}>{course.code}</p>
-                    <p className="text-xs mt-2" style={{ color: currentPalette['text-muted'] }}>
+{/* Wrapped text in a div */}
+                    <div>
+                      <p className="font-semibold">{course.name}</p>
+                      <p className="text-sm" style={{ color: currentPalette['text-muted'] }}>{course.code}</p>
+                      <p className="text-xs mt-2" style={{ color: currentPalette['text-muted'] }}>
                         {new Date(course.startDate).toLocaleDateString()} - {new Date(course.endDate).toLocaleDateString()}
-                    </p>
-                    </li>
+                      </p>
+                    </div>
+
+                    {/* New course edit button */}
+                    <button
+                      onClick={() => {
+                        setCourseToEdit(course);
+                        setEditModalOpen(true);
+                      }}
+                      className="text-sm font-semibold hover:opacity-70 transition-opacity px-4 py-2 rounded"
+                      style={{ color: currentPalette['accent-purple'], backgroundColor: currentPalette['accent-purple'] + '15' }}
+                    >
+                      Edit
+                    </button>
+                  </li>
                 )) : <p className="text-base" style={{ color: currentPalette['text-muted'] }}>No courses available.</p>}
                 </ul>
             </Card>
@@ -1118,6 +1168,13 @@ const AdminDashboard = () => {
         </div>
 
       </main>
+      {/* Edit Course Modal */}
+      <EditCourseModal 
+        isOpen={isEditModalOpen} 
+        onClose={() => setEditModalOpen(false)} 
+        course={courseToEdit}
+        onSave={handleUpdateCourse} 
+      />
     </div>
   );
 };
