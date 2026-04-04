@@ -625,6 +625,7 @@ const AdminDashboard = () => {
 
       case 'role':
         return (
+            <div className="grid grid-cols-1 gap-8 w-full">
             <Card title="Role Manager" currentPalette={currentPalette}>
                 <p className="text-base mb-6" style={{ color: currentPalette['text-muted'] }}>Update the role of a user by selecting their email and assigning a new role.</p>
                 <form name="roleUpdateForm" id="roleUpdateForm" onSubmit={handleRoleUpdate} className="space-y-4 max-w-lg">
