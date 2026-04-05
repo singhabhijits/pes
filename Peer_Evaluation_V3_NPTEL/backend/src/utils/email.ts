@@ -17,12 +17,49 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+function formatMailError(error: unknown) {
+  if (error && typeof error === 'object') {
+    const err = error as Record<string, unknown>;
+    return {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      responseCode: err.responseCode,
+    };
+  }
+
+  return { message: String(error) };
+}
+
+async function sendMailWithLogging(
+  context: string,
+  options: nodemailer.SendMailOptions
+) {
+  try {
+    return await transporter.sendMail(options);
+  } catch (error) {
+    console.error(`[mail] ${context} failed`, {
+      to: options.to,
+      subject: options.subject,
+      from: options.from,
+      usingFallbackSender:
+        !process.env.MAIL_SENDER && !process.env.EMAIL_USER,
+      usingFallbackPassword:
+        !process.env.MAIL_PASSWORD && !process.env.EMAIL_PASS,
+      transportUser: MAIL_USER,
+      error: formatMailError(error),
+    });
+    throw error;
+  }
+}
+
 export const sendHtmlEmail = async (
   to: string,
   subject: string,
   html: string
 ) => {
-  await transporter.sendMail({
+  await sendMailWithLogging('sendHtmlEmail', {
     from: DEFAULT_FROM,
     to,
     subject,
@@ -41,7 +78,7 @@ export const sendReminderEmail = async (
     subject,
     text,
   };
-  await transporter.sendMail(mailOptions);
+  await sendMailWithLogging('sendReminderEmail', mailOptions);
 };
 
 export const sendInviteEmail = async (
@@ -101,5 +138,5 @@ export const sendTicketResolvedEmail = async (
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  await sendMailWithLogging('sendTicketResolvedEmail', mailOptions);
 };
