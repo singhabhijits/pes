@@ -26,7 +26,6 @@ const createInviteToken = () => {
 };
 
 export const bulkAddUsers = async (req: Request, res: Response): Promise<void> => {
-  console.log("NEW INVITE FLOW HIT");
   try {
     const { users } = req.body;
 

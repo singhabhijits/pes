@@ -35,7 +35,10 @@ export const sendOtpEmail = async (req: Request, res: Response) : Promise<void> 
     );
     res.status(200).json({ message: 'OTP sent successfully' });
   } catch (error) {
-    console.error(error);
+    console.error('sendOtpEmail failed', {
+      email,
+      error,
+    });
     res.status(500).json({ message: 'Failed to send OTP' });
   }
 };
@@ -157,7 +160,10 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
     res.status(200).json({ message: 'Password reset link sent to email.' });
   } catch (err) {
-    console.error('Error in forgotPassword:', err);
+    console.error('forgotPassword mail flow failed', {
+      email,
+      error: err,
+    });
     res.status(500).json({ message: 'Internal server error' });
   }
 };
