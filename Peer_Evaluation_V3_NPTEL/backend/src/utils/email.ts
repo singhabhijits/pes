@@ -1,31 +1,29 @@
-import nodemailer from 'nodemailer';
-
-const MAIL_USER =
-  process.env.MAIL_SENDER ||
-  process.env.EMAIL_USER ||
-  'noreplypeerevaluationsystem@gmail.com';
-const MAIL_PASS =
-  process.env.MAIL_PASSWORD || process.env.EMAIL_PASS || 'twmnfoksvgwfcegh';
+const RESEND_API_URL = 'https://api.resend.com/emails';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const DEFAULT_FROM =
-  process.env.MAIL_FROM || `"Peer Evaluation System" <${MAIL_USER}>`;
+  process.env.MAIL_FROM || 'Peer Evaluation System <onboarding@resend.dev>';
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: MAIL_USER,
-    pass: MAIL_PASS,
-  },
-});
+type SendEmailPayload = {
+  from: string;
+  to: string[];
+  subject: string;
+  html?: string;
+  text?: string;
+};
 
 function formatMailError(error: unknown) {
-  if (error && typeof error === 'object') {
-    const err = error as Record<string, unknown>;
+  if (error instanceof Error) {
+    const err = error as Error & {
+      code?: string;
+      status?: number;
+      details?: unknown;
+    };
+
     return {
       message: err.message,
       code: err.code,
-      command: err.command,
-      response: err.response,
-      responseCode: err.responseCode,
+      status: err.status,
+      details: err.details,
     };
   }
 
@@ -34,20 +32,46 @@ function formatMailError(error: unknown) {
 
 async function sendMailWithLogging(
   context: string,
-  options: nodemailer.SendMailOptions
+  payload: SendEmailPayload
 ) {
+  if (!RESEND_API_KEY) {
+    const error = new Error('RESEND_API_KEY is not configured');
+    (error as Error & { code?: string }).code = 'MAIL_CONFIG_MISSING';
+    throw error;
+  }
+
   try {
-    return await transporter.sendMail(options);
+    const response = await fetch(RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      const error = new Error(`Resend API request failed with ${response.status}`);
+      const resendError = error as Error & {
+        code?: string;
+        status?: number;
+        details?: string;
+      };
+
+      resendError.code = 'RESEND_API_ERROR';
+      resendError.status = response.status;
+      resendError.details = body;
+      throw resendError;
+    }
+
+    return await response.json();
   } catch (error) {
     console.error(`[mail] ${context} failed`, {
-      to: options.to,
-      subject: options.subject,
-      from: options.from,
-      usingFallbackSender:
-        !process.env.MAIL_SENDER && !process.env.EMAIL_USER,
-      usingFallbackPassword:
-        !process.env.MAIL_PASSWORD && !process.env.EMAIL_PASS,
-      transportUser: MAIL_USER,
+      to: payload.to,
+      subject: payload.subject,
+      from: payload.from,
+      provider: 'resend',
       error: formatMailError(error),
     });
     throw error;
@@ -61,7 +85,7 @@ export const sendHtmlEmail = async (
 ) => {
   await sendMailWithLogging('sendHtmlEmail', {
     from: DEFAULT_FROM,
-    to,
+    to: [to],
     subject,
     html,
   });
@@ -72,13 +96,12 @@ export const sendReminderEmail = async (
   subject: string,
   text: string
 ) => {
-  const mailOptions = {
+  await sendMailWithLogging('sendReminderEmail', {
     from: DEFAULT_FROM,
-    to,
+    to: [to],
     subject,
     text,
-  };
-  await sendMailWithLogging('sendReminderEmail', mailOptions);
+  });
 };
 
 export const sendInviteEmail = async (
@@ -103,7 +126,6 @@ export const sendInviteEmail = async (
   );
 };
 
-//  Updated function to include marksUpdated
 export const sendTicketResolvedEmail = async (
   to: string,
   studentName: string,
@@ -113,9 +135,9 @@ export const sendTicketResolvedEmail = async (
   ticketId: string,
   marksUpdated?: number | null
 ) => {
-  const mailOptions = {
+  await sendMailWithLogging('sendTicketResolvedEmail', {
     from: DEFAULT_FROM,
-    to,
+    to: [to],
     subject: `Resolved Ticket: ${ticketSubject}`,
     html: `
       <p>Dear ${studentName},</p>
@@ -131,12 +153,10 @@ export const sendTicketResolvedEmail = async (
             : ''
         }
       </ul>
-      <p>Status: ✅ Resolved</p>
+      <p>Status: Resolved</p>
       <p>Thank you for using the Peer Evaluation System.</p>
       <br/>
       <p>Regards,<br/>Peer Evaluation Team</p>
     `,
-  };
-
-  await sendMailWithLogging('sendTicketResolvedEmail', mailOptions);
+  });
 };
